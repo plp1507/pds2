@@ -30,15 +30,19 @@ im_ruido= image + w
 f_im8, _ = wiener_filter(im_ruido, 8, 0)
 f_im2, _ = wiener_filter(im_ruido, 2, 0)
 
-
-fig, ax = plt.subplots(2, 2)
+fig, ax = plt.subplots(1, 2)
 ax[0].imshow(image, cmap = 'gray')
-ax[1].imshow(f_im2, cmap = 'gray')
-ax[2].imshow(f_im8, cmap = 'gray')
-ax[0].set_ylabel('Imagem original')
-ax[1].set_ylabel('Filtro 2x2')
-ax[2].set_ylabel('Filtro 8x8')
+ax[0].set_title('Imagem original')
+ax[1].imshow(im_ruido, cmap = 'gray')
+ax[1].set_title(f'Imagem com ruído de var. {var}')
+plt.show()
 
+plt.imshow(f_im2, cmap = 'gray')
+plt.title('Filtro 2x2')
+plt.show()
+
+plt.imshow(f_im8, cmap = 'gray')
+plt.title('Filtro 8x8')
 plt.show()
 
 #1b
@@ -46,10 +50,11 @@ var_ = np.arange(0.015, 0.085, 0.01)
 
 for i in range(len(var_)):
     w_ = np.sqrt(var_[i])*np.random.randn(np.shape(image)[0], np.shape(image)[1])
-    im_ruido_ = image + w
+    im_ruido_ = image + w_
     
-    f_im = wiener_filter(im_ruido_, 5, 0)
+    f_im, _ = wiener_filter(im_ruido_, 5, 0)
     
-    plt.imshow(f_im, cmap = 'gray')
+    plt.imshow(f_im-im_ruido_, cmap = 'gray')
+    plt.title(f'Filtro 5x5 com variância {round(var_[i], 3)}')
     plt.show()
 
