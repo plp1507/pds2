@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy.io.wavfile as wav
+from scipy.io import wavfile
 from scipy.signal import lfilter
-
+'''
 #### Duração da simulação
 T = 10**4
 
@@ -10,7 +10,7 @@ T = 10**4
 P = np.asarray([0.0723, 0.578, 0.367, 0.2210, 0.0883])
 S = np.asarray([0.0875, 0.443, 0.254, 0.3210, 0.0964])
 
-#### QUESTÃO 1 - Estimação de S (Ŝ ou Sh)
+#### QUESTÃO 1 - Estimação de S (Ŝ ou Shw)
 x_iden = np.random.randn(T)
 y_iden = lfilter(S, 1, x_iden) ## Aplicação de S(z) como filtro FIR num vetor de ruído gaussiano
 
@@ -43,5 +43,90 @@ ax[1].set_ylabel('Amplitude')
 ax[1].set_xlabel('Numerando dos coeficientes do filtro')
 ax[1].legend()
 ax[1].grid()
+
+plt.show()
+
+#### QUESTÃO 2 - Utilização de Ŝ(z) (Shw(z))
+len_inpt = 1000
+
+x_inpt = np.sqrt(0.002)*np.random.randn(len_inpt) #ruído branco gaussiano de variância 0.002
+y = lfilter(S, 1, x_inpt)
+yh= lfilter(Shw, 1, x_inpt)
+
+plt.plot(y, label = 'saída com filtro real')
+plt.plot(yh, label = 'saída com filtro estimado')
+plt.grid()
+plt.legend()
+plt.ylabel('Amplitude')
+plt.xlabel('k')
+plt.show()
+'''
+
+#### QUESTÃO 3 - Utilização do filtro em sinal real
+T = 10**3   #número de iterações
+_, sig = wavfile.read('Flauta.wav')  # sinal de interesse
+sig = sig/np.max(np.abs(sig))
+
+w = np.sqrt(0.01)*np.random.randn(len(sig))     # vetor de ruído
+noise_p = np.sum(w**2)
+
+sig_inpt = sig + w   # sinal com ruído (entrada do sistema)
+
+plt.plot(sig_inpt, label = 'sinal ruidoso')
+plt.plot(sig, label = 'sinal original')
+plt.ylabel('Amplitude')
+plt.xlabel('k')
+plt.grid()
+plt.legend()
+plt.show()
+
+#algoritmo LMS
+f_order = 10
+Shx = np.zeros(f_order)
+Shw = np.zeros(f_order)
+
+e_canc = np.zeros(len(sig))
+e_geral = np.zeros(T)
+
+mu_max = 2/noise_p
+print(mu_max)
+for i in range(T):
+    for j in range(f_order, len(sig)):
+        Shx = sig_inpt[j-f_order:j]
+        Shy = np.sum(Shw * Shx)
+        e_canc[j] = sig_inpt[j] - Shy
+        Shw += mu_max*e_canc[j]*Shx
+    e_geral[i] = np.sum(e_canc)
+
+fig, ax = plt.subplots(2, 1)
+ax[0].plot(e_geral, label = 'erro de cancelamento')
+ax[0].set_ylabel('Amplitude')
+ax[0].set_xlabel('Iterações')
+ax[0].grid()
+ax[0].legend()
+ax[1].stem(Shw, label = 'pesos do filtro')
+ax[1].set_ylabel('Amplitude')
+ax[1].set_xlabel('Numerando dos coeficientes do filtro')
+ax[1].grid()
+ax[1].legend()
+
+plt.show()
+
+y = sig
+yh= lfilter(Shw, 1, sig + w)
+
+fig, ax = plt.subplots(2, 1)
+ax[0].plot(yh, label = 'sinal estimado')
+ax[0].plot(y, label = 'sinal original')
+ax[0].set_ylabel('Amplitude')
+ax[0].set_xlabel('k')
+ax[0].grid()
+ax[0].legend()
+
+ax[1].semilogy(10*e_canc, label = 'erro de cancelamento final')
+ax[1].set_ylabel('Amplitude')
+ax[1].set_xlabel('k')
+ax[1].grid()
+ax[1].legend()
 
 plt.show()
