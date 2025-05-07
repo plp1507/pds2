@@ -63,7 +63,6 @@ plt.show()
 '''
 
 #### QUESTÃO 3 - Utilização do filtro em sinal real
-T = 10**3   #número de iterações
 _, sig = wavfile.read('Flauta.wav')  # sinal de interesse
 sig = sig/np.max(np.abs(sig))
 
@@ -71,7 +70,7 @@ w = np.sqrt(0.01)*np.random.randn(len(sig))     # vetor de ruído
 noise_p = np.sum(w**2)
 
 sig_inpt = sig + w   # sinal com ruído (entrada do sistema)
-
+'''
 plt.plot(sig_inpt, label = 'sinal ruidoso')
 plt.plot(sig, label = 'sinal original')
 plt.ylabel('Amplitude')
@@ -79,29 +78,44 @@ plt.xlabel('k')
 plt.grid()
 plt.legend()
 plt.show()
-
+'''
 #algoritmo LMS
 f_order = 10
+
 Shx = np.zeros(f_order)
 Shw = np.zeros(f_order)
 
 e_canc = np.zeros(len(sig))
-e_geral = np.zeros(T)
 
 mu_max = 2/noise_p
-print(mu_max)
-for i in range(T):
-    for j in range(f_order, len(sig)):
-        Shx = sig_inpt[j-f_order:j]
+print(f"mu máximo: {mu_max}")
+mu_max = 0.025/noise_p
+print(f'mu utilizado: {mu_max}')
+
+plt.stem(np.arange(0 + 1, f_order + 1, 1), Shw, 'C2', label = 'pesos iniciais')
+
+for i in range(f_order, len(sig)):
+    for j in range(f_order):
+        Shx[j] = sig_inpt[i-j]
         Shy = np.sum(Shw * Shx)
-        e_canc[j] = sig_inpt[j] - Shy
-        Shw += mu_max*e_canc[j]*Shx
-    e_geral[i] = np.sum(e_canc)
+        e_canc[i] = sig[i] - Shy
+        Shw[j] += mu_max*e_canc[i]*Shx[j]
+    if(i % 8000 == 0):
+        plt.stem(np.arange(i/(2.1*len(sig)) + 1, f_order + i/(2.1*len(sig)) + 1, 1), Shw, markerfmt = 'x')
+
+step = 0.5
+plt.stem(np.arange(step + 1, f_order + step + 1, 1), Shw, 'C1', label = 'pesos finais')
+plt.grid()
+plt.legend()
+plt.show()
+
+yh = lfilter(Shw, 1, sig_inpt)
 
 fig, ax = plt.subplots(2, 1)
-ax[0].plot(e_geral, label = 'erro de cancelamento')
+ax[0].plot(sig_inpt, label = 'sinal ruidoso')
+ax[0].plot(yh, label = 'sinal estimado')
 ax[0].set_ylabel('Amplitude')
-ax[0].set_xlabel('Iterações')
+ax[0].set_xlabel('k')
 ax[0].grid()
 ax[0].legend()
 ax[1].stem(Shw, label = 'pesos do filtro')
@@ -112,12 +126,9 @@ ax[1].legend()
 
 plt.show()
 
-y = sig
-yh= lfilter(Shw, 1, sig + w)
-
 fig, ax = plt.subplots(2, 1)
 ax[0].plot(yh, label = 'sinal estimado')
-ax[0].plot(y, label = 'sinal original')
+ax[0].plot(sig, label = 'sinal original')
 ax[0].set_ylabel('Amplitude')
 ax[0].set_xlabel('k')
 ax[0].grid()
@@ -130,3 +141,4 @@ ax[1].grid()
 ax[1].legend()
 
 plt.show()
+
