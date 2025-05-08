@@ -1,75 +1,88 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-#### Características do treinamento
-eta = 0.1
-n_epocas = 100
-tolerancia = 1 
+def adaline_training(training_parameters, func_parameters):
 
+    #### Características do treinamento
+    eta = training_parameters[0]
+    n_epocas = training_parameters[1]
+    tolerancia = training_parameters[2]
 
-#### Dados de entrada
-n_amostras = 10000  # número de pontos
-a = 4     # coeficiente angular da reta
-b = 1     # termo independente
+    #### Dados de entrada
+    n_amostras = func_parameters[0] # número de pontos
+    a = func_parameters[1]          # coeficiente angular da reta
+    b = func_parameters[2]          # termo independente
+    sigma2 = func_parameters[3]     # variância de ruído
 
-sigma2 = 0.1 # variância de ruído
+    #### Sinal de entrada
+    X_ = np.linspace(-2, 2, n_amostras)
+    X = np.reshape(X_, np.shape(X_)+(1,))
 
-#### Sinal de entrada
-X_ = np.linspace(-2, 2, n_amostras)
-X = np.reshape(X_, np.shape(X_)+(1,))
+    noise = np.sqrt(sigma2)*np.random.randn(n_amostras)
+    noise = np.reshape(noise, np.shape(noise)+(1,))
 
-noise = np.sqrt(sigma2)*np.random.randn(n_amostras)
-noise = np.reshape(noise, np.shape(noise)+(1,))
+    Yw = a*X + b + noise  # reta com ruído
 
+    #### Inicializações
+    X_bias = np.ones([n_amostras, 1])      # entrada de bias
+    X = np.hstack((X, X_bias))
 
-Yw = a*X + b + noise  # reta com ruído
+    W = np.random.randn(2)   # pesos aleatórios
 
-#### Inicializações
-X_bias = np.ones([n_amostras, 1])      # entrada de bias
+    erro = 0
+    vetor_erros = np.zeros([1, 2])
 
-X = np.hstack((X, X_bias))
+    epoca = 1
 
-W = np.random.randn(2)   # pesos aleatórios
+    #### Loop de treinamento
 
-erro = 0
-vetor_erros = np.zeros([1, 2])
+    while(True):
+        erro_q = 0
+        random_indx = np.arange(n_amostras)
+        np.random.default_rng().shuffle(random_indx)
+        for i in range(n_amostras):
+            y = np.transpose(W*X[random_indx[i]][:])
 
-epoca = 1
+            erro = np.transpose(Yw[random_indx[i]] - y)
 
-#### Loop de treinamento
+            deltaw_ = eta*erro*X[random_indx[i]][:]
+            W += deltaw_
 
-while(True):
-    erro_q = 0
-    random_indx = np.arange(n_amostras)
-    np.random.default_rng().shuffle(random_indx)
-    for i in range(n_amostras):
-        y = np.transpose(W*X[random_indx[i]][:])
+            erro_q += erro**2
 
-        erro = np.transpose(Yw[random_indx[i]] - y)
+        if(epoca != 1):
+            vetor_erros = np.vstack((vetor_erros, erro_q/n_amostras))
+        else:
+            vetor_erros = erro_q/n_amostras
 
-        deltaw_ = eta*erro*X[random_indx[i]][:]
-        W += deltaw_
+        dif = np.linalg.norm(vetor_erros[epoca - 1] - erro_q)
 
-        erro_q += erro**2
+        if((dif < tolerancia) or (epoca > n_epocas)):
+            break
 
-    
-    if(epoca != 1):
-        vetor_erros = np.vstack((vetor_erros, erro_q/n_amostras))
-    else:
-        vetor_erros = erro_q/n_amostras
+        print(f'Época: {epoca}')
+        epoca += 1
 
-    dif = np.linalg.norm(vetor_erros[epoca - 1] - erro_q)
-    print(dif)
+    return Yw, W, X_, vetor_erros 
 
-    if((dif < tolerancia) or (epoca > n_epocas)):
-        break
+''' 
+    #### Características do treinamento
+eta = training_parameters[0]
+n_epocas = training_parameters[1]
+tolerancia = training_parameters[2]
 
-    epoca += 1
+    #### Dados de entrada
+n_amostras = func_parameters[0] # número de pontos
+a = func_parameters[1]          # coeficiente angular da reta
+b = func_parameters[2]          # termo independente
+sigma2 = func_parameters[3]     # variância de ruído
+'''
 
+Yw, W, X_, _ = adaline_training([0.1, 10**2, 1], [10**3, 3, -1, 0.01])
 
 #### Visualização dos resultados
-
 plt.plot(Yw)
 plt.plot(W[0]*X_ + W[1])
 plt.grid()
 plt.show()
+
