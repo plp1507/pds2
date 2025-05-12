@@ -78,11 +78,17 @@ b = func_parameters[2]          # termo independente
 sigma2 = func_parameters[3]     # variância de ruído
 '''
 
-Yw, W, X_, _ = adaline_training([0.1, 10**2, 1], [10**3, 3, -1, 0.01])
+Yw, W, X_, erro = adaline_training([0.1, 10**2, 1], [10**3, 3, -1, 0.01])
 
 #### Visualização dos resultados
-plt.plot(Yw)
-plt.plot(W[0]*X_ + W[1])
-plt.grid()
+fig, ax = plt.subplots(2, 1)
+
+ax[0].plot(Yw)
+ax[0].plot(W[0]*X_ + W[1])
+ax[0].grid()
+
+ax[1].plot(erro[0])
+ax[1].plot(erro[1])
+ax[1].grid()
 plt.show()
 
