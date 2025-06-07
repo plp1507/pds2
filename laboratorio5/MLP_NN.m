@@ -5,26 +5,26 @@ close all;
 mkdir('Results'); %Diretório para armazenar os resultados
 
 %% Parâmetros de configuração
-dataFileName = 'sharky.linear.points'; %sharky.linear.points - sharky.circle.points - sharky.wave.points - sharky.spirals.points
+dataFileName = 'sharky.spirals.points'; %sharky.linear.points - sharky.circle.points - sharky.wave.points - sharky.spirals.points
 nbrOfNeuronsInEachHiddenLayer = [4 10 5]; %linear:[4] - circle:[10] - wave,spirals:[10 10]
 nbrOfOutUnits = 2;
 unipolarBipolarSelector = 0; %0 para Unipolar, -1 para Bipolar
 
-learningRate = 0.201;
+learningRate = 0.9;
 nbrOfEpochs_max = 1000;
 
-enable_resilient_gradient_descent = 0; %1 para habilitar, 0 para desabilitar
+enable_resilient_gradient_descent = 1; %1 para habilitar, 0 para desabilitar
 learningRate_plus = 1.2;
 learningRate_negative = 0.5;
 deltas_start = 0.9;
 deltas_min = 10^-6;
 deltas_max = 50;
 
-enable_decrease_learningRate = 0; %1 para habilitar o decréscimo da taxa de aprendizagem, 0 para desabilitar
+enable_decrease_learningRate = 1; %1 para habilitar o decréscimo da taxa de aprendizagem, 0 para desabilitar
 learningRate_decreaseValue = 0.0001;
 min_learningRate = 0.05;
 
-enable_learningRate_momentum = 0; %1 para habilitar, 0 para desabilitar
+enable_learningRate_momentum = 1; %1 para habilitar, 0 para desabilitar
 momentum_alpha = 0.05;
 
 draw_each_nbrOfEpochs = 100;
