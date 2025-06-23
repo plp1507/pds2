@@ -1,15 +1,14 @@
 """
-Simulação de Montecarlo para sistemas QAM OFDM através de canal PLC
+Simulação de Montecarlo para sistemas QAM OFDM em canal AWGN
 
 Autor: Pedro Lucca
-Data: 23/10/2024
-Versão: 3.2
+Data: 03/06/2025
+Versão: 1
 """
 
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.spatial.distance import cdist
-from scipy.io import loadmat
 from math import erfc
 
 
@@ -89,42 +88,24 @@ def detec(msgR):
 
 #%% Parâmetros do sistema
 # Número de subportadoras
-N = 10**3
+N = 128
 # Número de blocos de símbolo
-L = 128
+L = 10**3
 # Comprimento do prefíxo cíclico
-Ncp = 3
+Ncp = 0
 # Ordem da constelação
 M = 16
-#Limites da SNR (dB)
-snr_min = 0
-snr_max = 100
 
 # SNR (dB)
-snr_dB = np.arange(snr_min, snr_max, 3)
+SNR_dB = 1
 # SNR linear
-snr = 10**(snr_dB/10)
-# Potência do ruído
-sigma_2 = 1/snr
+sigma_2 = 10**(-SNR_dB/10)
 
+#%%Cálculo teórico da SER
 
-#%%Curva teórica da SER
-'''
-snr_dB_teorico = np.linspace(snr_min, snr_max, 1000)
-snrT = 10**(snr_dB_teorico/10)
-ser_teorica = np.zeros(len(snr_dB_teorico))
-for i in range(len(snr_dB_teorico)):
-    argerfc = (3/(2*(M-1)))*(snrT[i])
-    p = (1-np.sqrt(1/M))*erfc(np.sqrt(argerfc))
-    ser_teorica[i] = 1-((1-p)**2)
-'''
-
-
-#%% Carregamento do arquivo referente ao canal PLC
-canal = loadmat("NB_0_500k.mat")
-canal = canal['h'][0]
-canal = np.concatenate((canal, np.zeros((2*N+Ncp)*L - len(canal))))
-
+argerfc = (3/(2*(M-1)))*(SNR_dB)
+p = (1-np.sqrt(1/M))*erfc(np.sqrt(argerfc))
+SERt = 1-((1-p)**2)
 
 #%% Geração do sinal OFDM
 # Geração da consteção M-PAM
@@ -132,80 +113,61 @@ constel = constellation(M)
 
 #escolha aleatória de pontos da constelação, mundança serie/paralelo e mapeamento DMT
 X = np.random.choice(constel, N*L)
-
 Xl = np.reshape(X, [N, L], order = 'F')
-
 Xmap = DMTmap(Xl)
 
 #aplicação da IDFT, adição do prefx. cíclico e conversão paralelo/serie
 x = np.fft.ifft(Xmap, axis = 0, norm = 'ortho')
-
 xcp = np.vstack((x[2*N-Ncp:], x))
-
 xn = np.reshape(xcp,-1, order = 'F')
 
-#convolução com a resposta ao impulso do canal
-y_tilde = np.convolve(xn.real,canal)[:(2*N + Ncp)*L]
+y_tilde = xn.real
+
+#%% Passagem pelo canal e recepção
+
+#convolução com canal
+sigma = 1/2
+h = np.linspace(0, 3)
+p_h = (h/sigma**2)*np.exp(-(h**2)/2*sigma**2)
 
 
-#%% Simulação Montecarlo
-ser = np.zeros(len(snr))
+#geração do ruído a partir da SNR
+v = np.sqrt(sigma_2)*np.random.randn(len(y_tilde))
 
-for k, Noise in enumerate(sigma_2):
+#checagem da SNR obtida
+Pv = np.sum(np.abs(v)**2)/len(v)
     
-    erro = 0
+#adição de ruído
+y = y_tilde + v
     
-    while(erro == 0):
-        #geração do ruído a partir da SNR
-        v = np.sqrt(Noise)*np.random.randn(len(y_tilde))
-
-        #checagem da SNR obtida
-        Pv = np.sum(np.abs(v)**2)/len(v)
+#conversão serie/paralelo, remoção do prefx. cíclico, aplicação da DFT e desmapeamento
+xcpR = np.reshape(y, [2*N+Ncp, L], order = 'F')
+xR = np.delete(xcpR, range(Ncp), axis = 0)
+XlR = np.fft.fft(xR, axis = 0, norm = 'ortho')
+Xdemap = DMTdemap(XlR)
     
-        #adição de ruído
-        y = y_tilde + v
-    
-        y = np.fft.ifft(np.fft.fft(y)/np.fft.fft(canal))
-    
-        #conversão serie/paralelo, remoção do prefx. cíclico, aplicação da DFT e desmapeamento
-        xcpR = np.reshape(y, [2*N+Ncp, L], order = 'F')
-        xR = np.delete(xcpR, range(Ncp), axis = 0)
-        XlR = np.fft.fft(xR, axis = 0, norm = 'ortho')
-        Xdemap = DMTdemap(XlR)
-    
-        #conversão paralelo/série
-        XR = np.reshape(Xdemap, -1, order = 'F')
-        #detecção dos pontos após a passagem pelo canal
-        XRd = np.zeros(len(XR), dtype = "complex")
-        for i in range(N*L):
-            XRd[i] = detec(XR[i])
+#conversão paralelo/série
+XR = np.reshape(Xdemap, -1, order = 'F')
+#detecção dos pontos após a passagem pelo canal
+XRd = np.zeros(len(XR), dtype = "complex")
+for i in range(N*L):
+    XRd[i] = detec(XR[i])
         
-        #contagem do erro e SER
-        erro = np.sum(XRd != X)
+#contagem do erro e SER
+erro = np.sum(XRd != X)
         
-    ser[k]  = erro/(N*L)
+SERs  = erro/(N*L)
    
-    print('SNR = {} dB'.format(snr_dB[k]))
-    print('SNR simulada = {} dB'.format(10*np.log10(1/Pv)))
+print(f'SNR teórica:  {SNR_dB} dB')
+print(f'SNR simulada: {round(10*np.log10(1/Pv), 3)} dB')
     
-    print('SER obtida = {}'.format(ser[k]))
-    print("")
+print(f'SER obtida:  {round(SERs, 3)}')
+print(f'SER teórica: {round(SERt, 3)}')
+print("")
 
 
 #%% Figuras
-#SNRdB x SER teórica
-'''
-plt.figure(figsize=(6,3))
-plt.plot(snr_dB_teorico, ser_teorica, label ='curva teórica')
-'''
-# SNRdB x SER simulada
-plt.plot(snr_dB, ser, 'o', label ='pontos simulados')
+plt.rcParams.update({'font.size':15})
 
-plt.ylabel('SER')
-plt.xlabel('SNR (dB)')
 
-plt.yscale('log')
-
-plt.grid()
-plt.show()
 
