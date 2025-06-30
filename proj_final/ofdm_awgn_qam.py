@@ -11,6 +11,7 @@ from matplotlib import pyplot as plt
 from scipy.spatial.distance import cdist
 from math import erfc
 
+plt.rcParams.update({'font.size':15})
 
 #%% Funções
 def constellation(m):
@@ -44,28 +45,6 @@ def constellation(m):
     
     return out
 
-def DMTmap(inpt):
-    """
-    Função para o mapeamento DMT
-
-    Parâmetros
-    ----------
-    inpt: Mensagem a ser mapeada.
-    
-    Saída
-    -----
-    out: Mensagem após o mapeamento DMT.
-
-    """
-    dmt1 = np.vstack((inpt[-1].real, inpt[:N-1]))
-    dmt2 = np.vstack((inpt[-1].imag, np.flipud(np.conjugate(inpt[:N-1]))))
-    dmtmap = np.vstack((dmt1, dmt2))
-    return dmtmap
-
-def DMTdemap(inpt):
-    out = np.vstack((inpt[1:N], inpt[0] + 1j*inpt[N]))
-    return out
-
 def detec(msgR):
     """
     Função de detecção de símbolos
@@ -79,31 +58,30 @@ def detec(msgR):
     Ponto da constelação mais próximo.
 
     """
-    for i in range(M):
-        XA = np.column_stack((msgR.real, msgR.imag))
-        XB = np.column_stack((constel.real, constel.imag))
-        distcs = cdist(XA, XB, metric = 'euclidean')
-    return constel[np.argmin(distcs)]
+    XA = np.column_stack((msgR.real, msgR.imag))
+    XB = np.column_stack((constel.real, constel.imag))
+    distcs = cdist(XA, XB, metric = 'euclidean')
+    return constel[np.argmin(distcs, axis = 1)]
 
 
 #%% Parâmetros do sistema
 # Número de subportadoras
-N = 128
+N = 64
 # Número de blocos de símbolo
-L = 10**3
+L = 10**2
 # Comprimento do prefíxo cíclico
-Ncp = 0
+Ncp = 16
 # Ordem da constelação
 M = 16
 
 # SNR (dB)
-SNR_dB = 1
+SNR_dB = 0
 # SNR linear
 sigma_2 = 10**(-SNR_dB/10)
 
 #%%Cálculo teórico da SER
 
-argerfc = (3/(2*(M-1)))*(SNR_dB)
+argerfc = (3/(2*(M-1)))*(10**(SNR_dB/10))
 p = (1-np.sqrt(1/M))*erfc(np.sqrt(argerfc))
 SERt = 1-((1-p)**2)
 
@@ -114,60 +92,92 @@ constel = constellation(M)
 #escolha aleatória de pontos da constelação, mundança serie/paralelo e mapeamento DMT
 X = np.random.choice(constel, N*L)
 Xl = np.reshape(X, [N, L], order = 'F')
-Xmap = DMTmap(Xl)
 
 #aplicação da IDFT, adição do prefx. cíclico e conversão paralelo/serie
-x = np.fft.ifft(Xmap, axis = 0, norm = 'ortho')
-xcp = np.vstack((x[2*N-Ncp:], x))
+x = np.fft.ifft(Xl, axis = 0, norm = 'ortho')
+xcp = np.vstack((x[N-Ncp:], x))
 xn = np.reshape(xcp,-1, order = 'F')
-
-y_tilde = xn.real
+xn /= np.mean(np.abs(xn)**2)
 
 #%% Passagem pelo canal e recepção
 
 #convolução com canal
-sigma = 1/2
-h = np.linspace(0, 3)
-p_h = (h/sigma**2)*np.exp(-(h**2)/2*sigma**2)
+n_taps = 6
 
+# partes real e imaginária > distribuiçao normal
+hri = np.sqrt(1/2)*(np.random.randn(n_taps*L) + 1j*np.random.randn(n_taps*L))
+
+# módulo do canal
+sigma = 1/2
+h = np.linspace(0, 4, 1000)
+p_h = (h/sigma**2)*np.exp(-(h**2)/(2*sigma**2))
+p_h /= np.sum(p_h)
+
+'''
+#plot da distribuição
+
+plt.plot(h, p_h)
+plt.grid()
+plt.show()
+'''
+
+canal = np.random.choice(h, size = n_taps*L, p=p_h)*hri/np.mean(np.abs(hri)**2)
+canal = np.reshape(canal, [L, n_taps])
+
+# passagem pelo canal
+y_tilde = np.zeros((N+Ncp)*L + n_taps - 1, dtype = 'complex')
+
+for i in range(L):
+    y_tilde[i*(N+Ncp):(i+1)*(N+Ncp) + n_taps - 1] = np.convolve(xn[i*(N+Ncp):(i+1)*(N+Ncp)], canal[i])
+
+y_tilde = y_tilde[:(N+Ncp)*L]
 
 #geração do ruído a partir da SNR
-v = np.sqrt(sigma_2)*np.random.randn(len(y_tilde))
+v = np.sqrt(sigma_2/2)*(np.random.randn((N+Ncp)*L) + 1j*np.random.randn((N+Ncp)*L))
 
 #checagem da SNR obtida
-Pv = np.sum(np.abs(v)**2)/len(v)
+Pv = np.mean(np.abs(v)**2)
     
 #adição de ruído
-y = y_tilde + v
-    
+y = y_tilde# + v
+
 #conversão serie/paralelo, remoção do prefx. cíclico, aplicação da DFT e desmapeamento
-xcpR = np.reshape(y, [2*N+Ncp, L], order = 'F')
+xcpR = np.reshape(y, [N+Ncp, L], order = 'F')
 xR = np.delete(xcpR, range(Ncp), axis = 0)
 XlR = np.fft.fft(xR, axis = 0, norm = 'ortho')
-Xdemap = DMTdemap(XlR)
+
+XlR = np.reshape(XlR, -1, order = 'F')
+
+Xeq = np.zeros(N*L, dtype = 'complex')
+XRd = np.zeros(N*L, dtype = 'complex')
+
+###### equalizador lms
+n_lms = 8
+lms_eq = np.zeros([n_lms, 1], dtype = 'complex')
+eta = 0.00002
+
+epoca = 0
+max_epocas = 10**4
+
+SERs = 0
+lim_SER = 0.4
+
+while (SERs > lim_SER  or epoca < max_epocas):
+    for i in range(n_lms, N*L):
+        Xeq[i] = np.matmul(XlR[i - n_lms:i], lms_eq)[0]
+
+        erro = X[i] - Xeq[i]
+
+        d_lms = eta*np.conj(erro)*np.transpose(np.array([X[i-n_lms:i]]))
+
+        lms_eq += d_lms
     
-#conversão paralelo/série
-XR = np.reshape(Xdemap, -1, order = 'F')
-#detecção dos pontos após a passagem pelo canal
-XRd = np.zeros(len(XR), dtype = "complex")
-for i in range(N*L):
-    XRd[i] = detec(XR[i])
-        
-#contagem do erro e SER
-erro = np.sum(XRd != X)
-        
-SERs  = erro/(N*L)
-   
-print(f'SNR teórica:  {SNR_dB} dB')
-print(f'SNR simulada: {round(10*np.log10(1/Pv), 3)} dB')
-    
-print(f'SER obtida:  {round(SERs, 3)}')
-print(f'SER teórica: {round(SERt, 3)}')
-print("")
+    #detecção dos pontos após a passagem pelo canal
+    XRd = detec(Xeq)
+    SERs = np.sum(XRd != X)/(N*L)
 
-
-#%% Figuras
-plt.rcParams.update({'font.size':15})
-
-
+    epoca += 1
+    print(f'erro:  {abs(erro)}')
+    print(f'delta: {np.reshape(d_lms, -1)}')
+    print(f'epoca: {epoca}')
 
