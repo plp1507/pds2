@@ -9,6 +9,7 @@ Versão: 1
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy.spatial.distance import cdist
+from scipy.io import loadmat
 from math import erfc
 
 plt.rcParams.update({'font.size':15})
@@ -75,7 +76,7 @@ Ncp = 16
 M = 16
 
 # SNR (dB)
-SNR_dB = 0
+SNR_dB = 20
 # SNR linear
 sigma_2 = 10**(-SNR_dB/10)
 
@@ -101,6 +102,11 @@ xn /= np.mean(np.abs(xn)**2)
 
 #%% Passagem pelo canal e recepção
 
+#canal = loadmat('./NB_0_500k.mat')['h'][0]
+
+#y_tilde = np.convolve(xn, canal)[:(N+Ncp)*L]
+
+
 #convolução com canal
 n_taps = 6
 
@@ -113,13 +119,13 @@ h = np.linspace(0, 4, 1000)
 p_h = (h/sigma**2)*np.exp(-(h**2)/(2*sigma**2))
 p_h /= np.sum(p_h)
 
-'''
+
 #plot da distribuição
 
-plt.plot(h, p_h)
-plt.grid()
-plt.show()
-'''
+#plt.plot(h, p_h)
+#plt.grid()
+#plt.show()
+
 
 canal = np.random.choice(h, size = n_taps*L, p=p_h)*hri/np.mean(np.abs(hri)**2)
 canal = np.reshape(canal, [L, n_taps])
@@ -139,7 +145,7 @@ v = np.sqrt(sigma_2/2)*(np.random.randn((N+Ncp)*L) + 1j*np.random.randn((N+Ncp)*
 Pv = np.mean(np.abs(v)**2)
     
 #adição de ruído
-y = y_tilde# + v
+y = y_tilde + v
 
 #conversão serie/paralelo, remoção do prefx. cíclico, aplicação da DFT e desmapeamento
 xcpR = np.reshape(y, [N+Ncp, L], order = 'F')
@@ -154,30 +160,45 @@ XRd = np.zeros(N*L, dtype = 'complex')
 ###### equalizador lms
 n_lms = 8
 lms_eq = np.zeros([n_lms, 1], dtype = 'complex')
-eta = 0.00002
+#lms_eq = np.transpose(np.array([np.random.randn(n_lms) + 1j*np.random.randn(n_lms)]))
+
+eta = 0.000001
 
 epoca = 0
-max_epocas = 10**4
+max_epocas = 1500
 
 SERs = 0
 lim_SER = 0.4
 
-while (SERs > lim_SER  or epoca < max_epocas):
+erro = 0
+lim_erro = Pv
+erro_t = np.zeros(max_epocas)
+
+while (erro > lim_erro  or epoca < max_epocas):
     for i in range(n_lms, N*L):
         Xeq[i] = np.matmul(XlR[i - n_lms:i], lms_eq)[0]
 
-        erro = X[i] - Xeq[i]
+        erro = (detec(Xeq[i]) - Xeq[i])[0]
 
-        d_lms = eta*np.conj(erro)*np.transpose(np.array([X[i-n_lms:i]]))
+        d_lms = eta*np.conj(erro)*np.transpose(np.array([X[i-n_lms:i][::-1]]))
 
         lms_eq += d_lms
     
+    
     #detecção dos pontos após a passagem pelo canal
-    XRd = detec(Xeq)
+    XRd = (detec(Xeq))[0]
     SERs = np.sum(XRd != X)/(N*L)
 
+    erro_t[epoca] = abs(erro)
     epoca += 1
     print(f'erro:  {abs(erro)}')
     print(f'delta: {np.reshape(d_lms, -1)}')
     print(f'epoca: {epoca}')
+    print(f'SER:   {SERs}\n\n')
+
+print(f'filtro final: {lms_eq}')
+
+plt.semilogy(erro_t[erro_t != 0])
+plt.grid()
+plt.show()
 
